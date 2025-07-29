@@ -1,0 +1,136 @@
+zerops:
+  # Jenkins Controller
+  - setup: jenkins
+    build:
+      deployFiles:
+        - utils
+
+      addToRunPrepare:
+        - utils
+
+    deploy:
+      readinessCheck:
+        httpGet:
+          port: 8080
+          path: /health/
+          host: localhost
+        failureTimeout: 600s
+        retryPeriod: 20s
+    run:
+      base: java@21
+      os: ubuntu
+
+      prepareCommands:
+        # Install Jenkins
+        - curl https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key | sudo tee /etc/apt/keyrings/jenkins-keyring.asc > /dev/null
+        - echo "deb [signed-by=/etc/apt/keyrings/jenkins-keyring.asc]" https://pkg.jenkins.io/debian-stable binary/ | sudo tee /etc/apt/sources.list.d/jenkins.list > /dev/null
+        - sudo apt-get update
+        - sudo apt-get install -y jenkins
+        - sudo mkdir -p /var/jenkins
+        - sudo chown -R zerops:zerops /var/jenkins
+
+        # Install AWS CLI for S3
+        - curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        - unzip awscliv2.zip
+        - sudo ./aws/install
+        - rm -rf aws awscliv2.zip
+
+        # Setup Jenkins directories
+        - mkdir -p /var/jenkins/casc_configs
+        - cp /home/zerops/utils/jenkins.yaml /var/jenkins/casc_configs/
+
+        # Install plugins
+        - curl -fsSL https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/2.12.13/jenkins-plugin-manager-2.12.13.jar -o /var/jenkins/plugin-manager.jar
+        - java -jar /var/jenkins/plugin-manager.jar --war /usr/share/java/jenkins.war --plugin-file /home/zerops/utils/plugins.txt --plugin-download-directory /var/jenkins/plugins
+
+      ports:
+        - port: 8080
+          httpSupport: true
+
+      envVariables:
+        # Home directory
+        JENKINS_HOME: /var/jenkins
+        JENKINS_PORT: 8080
+
+        # SMTP setup
+        JENKINS_SMTP_HOST: mailpit
+        JENKINS_SMTP_PORT: 25
+
+        # JAVA options
+        JAVA_OPTS: "-Djenkins.install.runSetupWizard=false -Xmx2048m"
+
+        CASC_JENKINS_CONFIG: /var/jenkins/casc_configs
+
+        # S3 Configuration from Zerops Object Storage
+        AWS_ACCESS_KEY_ID: ${storage_accessKeyId}
+        AWS_SECRET_ACCESS_KEY: ${storage_secretAccessKey}
+        AWS_ENDPOINT: ${storage_apiUrl}
+        AWS_REGION: us-east-1
+        AWS_USE_PATH_STYLE_ENDPOINT: "true"
+        S3_ARTIFACTS_BUCKET: ${storage_bucketName}/artifacts
+        S3_BACKUP_BUCKET: ${storage_bucketName}/backups
+        S3_LOGS_BUCKET: ${storage_bucketName}/logs
+
+      initCommands:
+        - chmod +x /var/www/utils/*.sh
+        - /var/www/utils/init.sh
+
+      start: /var/www/utils/start.sh
+
+      crontab:
+        - command: "/var/www/utils/backup-to-s3.sh"
+          timing: "0 6 * * *"
+        - command: "find /var/jenkins/workspace -type f -mtime +7 -delete"
+          timing: "0 2 * * *"
+
+      healthCheck:
+        httpGet:
+          port: 8080
+          path: /health/
+          host: localhost
+
+  # Jenkins Agent - Light workloads
+  - setup: agentlight
+    build:
+      deployFiles:
+        - utils/start-agent.sh
+
+    run:
+      base: java@21
+      os: ubuntu
+
+      envVariables:
+        JENKINS_URL: http://jenkins:8080
+        JENKINS_AGENT_WORKDIR: /var/jenkins
+        JENKINS_AGENT_LABELS: "linux zerops light"
+        JENKINS_AGENT_GROUP_NAME: "light"
+        JENKINS_EXECUTORS: 2
+        JENKINS_ADMIN_ID: admin
+        JENKINS_ADMIN_PASSWORD: ${jenkins_JENKINS_ADMIN_PASSWORD}
+
+      initCommands:
+        - chmod +x /var/www/utils/*.sh
+      start: /var/www/utils/start-agent.sh
+
+  # Jenkins Agent - Heavy workloads with build tools
+  - setup: agentheavy
+    build:
+      deployFiles:
+        - utils/start-agent.sh
+
+    run:
+      base: java@21
+      os: ubuntu
+
+      envVariables:
+        JENKINS_URL: http://jenkins:8080
+        JENKINS_AGENT_WORKDIR: /var/jenkins
+        JENKINS_AGENT_LABELS: "linux zerops heavy"
+        JENKINS_AGENT_GROUP_NAME: "heavy"
+        JENKINS_EXECUTORS: 4
+        JENKINS_ADMIN_ID: admin
+        JENKINS_ADMIN_PASSWORD: ${jenkins_JENKINS_ADMIN_PASSWORD}
+
+      initCommands:
+        - chmod +x /var/www/utils/*.sh
+      start: utils/start-agent.sh

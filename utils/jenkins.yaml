@@ -1,0 +1,38 @@
+jenkins:
+  systemMessage: "Jenkins on Zerops"
+  numExecutors: 5
+  mode: NORMAL
+
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_ID}"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+
+  authorizationStrategy:
+    roleBased:
+      roles:
+        global:
+          - name: "admin"
+            description: "Jenkins administrators"
+            permissions:
+              - "Overall/Administer"
+            entries:
+              - user: "admin"
+          - name: "readonly"
+            description: "Read-only users"
+            permissions:
+              - "Overall/Read"
+              - "Job/Read"
+            entries:
+              - group: "authenticated"
+unclassified:
+  location:
+    adminAddress: "${JENKINS_ADMIN_EMAIL}"
+    url: "${zeropsSubdomain}"
+
+  mailer:
+    replyToAddress: "${JENKINS_ADMIN_EMAIL}"
+    smtpHost: "${JENKINS_SMTP_HOST}"
+    smtpPort: "${JENKINS_SMTP_PORT}"

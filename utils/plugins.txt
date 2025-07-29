@@ -1,0 +1,17 @@
+configuration-as-code:latest
+s3:latest
+workflow-aggregator:latest
+git:latest
+github:latest
+credentials-binding:latest
+timestamper:latest
+ws-cleanup:latest
+ansicolor:latest
+build-timeout:latest
+email-ext:latest
+ssh-slaves:latest
+matrix-auth:latest
+slack:latest
+blueocean:latest
+swarm:latest
+role-strategy:latest

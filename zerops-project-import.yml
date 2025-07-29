@@ -1,0 +1,48 @@
+#yamlPreprocessor=on
+project:
+  name: recipe-jenkins
+  description: Production Jenkins CI/CD Platform
+
+services:
+  # Jenkins Controller
+  - hostname: jenkins
+    type: java@21
+
+    envSecrets:
+      JENKINS_ADMIN_ID: admin
+      JENKINS_ADMIN_PASSWORD: <@generateRandomString(<32>)>
+      JENKINS_ADMIN_EMAIL: admin@exmaple.com
+
+    maxContainers: 1
+    minContainers: 1
+
+    enableSubdomainAccess: true
+    buildFromGit: https://github.com/zeropsio/recipe-jenkins
+    priority: 10
+
+  # Agent Pool 1 - Light
+  - hostname: agentlight
+    type: java@21
+    buildFromGit: https://github.com/zeropsio/recipe-jenkins
+
+  # Agent Pool 2 - Heavy
+  - hostname: agentheavy
+    type: java@21
+
+    verticalAutoscaling:
+      cpuMode: DEDICATED
+
+    buildFromGit: https://github.com/zeropsio/recipe-jenkins
+
+  # Object Storage for S3
+  - hostname: storage
+    type: object-storage
+    priority: 10
+    objectStorageSize: 100
+    objectStoragePolicy: private
+
+  - hostname: mailpit
+    priority: 10
+    type: alpine@3.20
+    buildFromGit: https://github.com/zeropsio/recipe-mailpit
+    enableSubdomainAccess: true
